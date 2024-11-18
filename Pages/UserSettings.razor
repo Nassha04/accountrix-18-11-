@@ -1,0 +1,95 @@
+﻿@page "/usersettings"
+
+@layout MainLayout
+@inject NavigationManager _navigation
+@inject HttpClient HttpHandler
+
+@using MudBlazor
+
+<div class="transaction-page" style="display: flex; flex-direction: column; align-items: center; padding: 2em;">
+    <h2 style="color: #ffffff;">User Settings</h2>
+
+    <MudPaper Class="pa-8 ma-2" Outlined="true" Style="width: 40em; background-color: #1e1e2d; border-radius: 25px;">
+        <MudCard>
+            <MudCardContent>
+                <h3 style="color: #ffffff; margin-bottom: 1em;">Update Profile</h3>
+
+                <EditForm Model="_userDetail" OnValidSubmit="HandleValidSubmit">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary />
+
+                    <MudTextField @bind-Value="_userDetail.name" Label="Name" Required="true" />
+                    <MudTextField @bind-Value="_userDetail.email" Label="Email" Required="true" Type="email" />
+                    <MudTextField @bind-Value="_newPassword" Label="New Password" Type="password" Placeholder="Leave blank to keep current password" />
+
+                    <MudButton OnClick="async() => await HandleValidSubmit()" Variant="Variant.Filled" Size="Size.Large" Color="Color.Tertiary"
+                               StartIcon="@Icons.Material.Filled.Save" Style="margin-top: 1em;">Save Item</MudButton>
+                </EditForm>
+            </MudCardContent>
+        </MudCard>
+    </MudPaper>
+</div>
+
+
+@code {
+    private UserDetail _userDetail = new UserDetail();
+    private string _newPassword;
+    private string _successMessage;
+    private UserDetail tmp_UserDetail; // Buffer variable to store fetched user data
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUserDetails();
+    }
+
+    private async Task LoadUserDetails()
+    {
+        try
+        {
+            tmp_UserDetail = await HttpHandler.GetFromJsonAsync<UserDetail>("/usersettings");
+            _userDetail = tmp_UserDetail; // Populate the user detail for editing
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("Error loading user details: " + ex.Message);
+        }
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        try
+        {
+            // Step 1: Delete existing user data
+            var deleteResponse = await HttpHandler.PostAsJsonAsync($"/usersettings/{tmp_UserDetail.user_ID}", tmp_UserDetail.user_ID);
+            if (!deleteResponse.IsSuccessStatusCode)
+            {
+                Console.WriteLine("Failed to delete user data. Status Code: " + deleteResponse.StatusCode);
+                return;
+            }
+
+            // Step 2: Create a new UserDetail object with updated data
+            UserDetail newUserDetail = new UserDetail
+                {
+                    user_ID = tmp_UserDetail.user_ID, // Keep the same user ID
+                    name = _userDetail.name,
+                    email = _userDetail.email,
+                };
+
+            // Step 3: Save the new user data into the database
+            var saveResponse = await HttpHandler.PostAsJsonAsync("/usersettings", newUserDetail);
+            if (saveResponse.IsSuccessStatusCode)
+            {
+                _successMessage = "User  details updated successfully!";
+                await LoadUserDetails(); // Reload the user details
+            }
+            else
+            {
+                Console.WriteLine("Failed to save new user data. Status Code: " + saveResponse.StatusCode);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("Error updating user settings: " + ex.Message);
+        }
+    }
+}
